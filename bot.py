@@ -96,20 +96,16 @@ WELCOME_TEXT = """🔴 *TERMINATED BOT is here.*
 
 I stamp your photos with an official-looking *TERMINATED* seal.
 
-*How to use:*
+*How to trigger:*
 
-🔹 *In private chat:*
-Just send or forward any photo — I'll stamp it instantly.
-
-🔹 *In groups:*
-Two ways to trigger me:
+Two ways to use `/terminate`:
 1. Send a photo with `/terminate` as the caption
 2. Reply to any existing photo with `/terminate`
 
 *Commands:*
 /start — Show this message
 /help — How to use the bot
-/terminate — Stamp a photo in groups (use as caption or reply to a photo)
+/terminate — Stamp a photo (use as caption or reply to a photo)
 
 Just drop an image and watch it get terminated. 💀"""
 
@@ -142,15 +138,6 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 MAX_DIMENSION = 8000  # pixels
 
 
-def _is_group(update: Update) -> bool:
-    return update.message.chat.type in ("group", "supergroup")
-
-
-def _has_terminate_caption(update: Update) -> bool:
-    caption = (update.message.caption or "").strip()
-    return caption.startswith("/terminate")
-
-
 async def _stamp_and_reply(update, context, file_id, file_size):
     if file_size and file_size > MAX_FILE_SIZE:
         await update.message.reply_text("❌ Image too large (max 10 MB).")
@@ -162,24 +149,7 @@ async def _stamp_and_reply(update, context, file_id, file_size):
     await update.message.reply_photo(photo=io.BytesIO(stamped), caption="🔴 TERMINATED")
 
 
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if _is_group(update) and not _has_terminate_caption(update):
-        return
-    photo = update.message.photo[-1]
-    await _stamp_and_reply(update, context, photo.file_id, photo.file_size)
-
-
-async def handle_document_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if _is_group(update) and not _has_terminate_caption(update):
-        return
-    doc = update.message.document
-    await _stamp_and_reply(update, context, doc.file_id, doc.file_size)
-
-
 async def handle_terminate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /terminate sent as a reply to a photo in groups."""
-    if not _is_group(update):
-        return
     reply = update.message.reply_to_message
     if reply and reply.photo:
         photo = reply.photo[-1]
@@ -188,13 +158,26 @@ async def handle_terminate_command(update: Update, context: ContextTypes.DEFAULT
         doc = reply.document
         await _stamp_and_reply(update, context, doc.file_id, doc.file_size)
     else:
-        await update.message.reply_text("Send a photo with `/terminate` as the caption, or reply to a photo with /terminate. 🔴", parse_mode="Markdown")
+        await update.message.reply_text(
+            "Send a photo with `/terminate` as the caption, or reply to a photo with /terminate. 🔴",
+            parse_mode="Markdown",
+        )
 
 
-async def handle_other(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if _is_group(update):
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    caption = (update.message.caption or "").strip()
+    if not caption.startswith("/terminate"):
         return
-    await update.message.reply_text("Send me any image and I'll stamp it TERMINATED. 🔴")
+    photo = update.message.photo[-1]
+    await _stamp_and_reply(update, context, photo.file_id, photo.file_size)
+
+
+async def handle_document_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    caption = (update.message.caption or "").strip()
+    if not caption.startswith("/terminate"):
+        return
+    doc = update.message.document
+    await _stamp_and_reply(update, context, doc.file_id, doc.file_size)
 
 
 if __name__ == "__main__":
@@ -205,5 +188,4 @@ if __name__ == "__main__":
     app.add_handler(ChatMemberHandler(handle_bot_added_to_group, ChatMemberHandler.MY_CHAT_MEMBER))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.IMAGE, handle_document_image))
-    app.add_handler(MessageHandler(~filters.PHOTO & ~filters.Document.IMAGE, handle_other))
     app.run_polling(allowed_updates=Update.ALL_TYPES)
