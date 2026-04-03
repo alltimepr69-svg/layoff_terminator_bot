@@ -50,15 +50,15 @@ def add_terminated_stamp(image_bytes: bytes) -> bytes:
     canvas = Image.new("RGBA", (stamp_w, stamp_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas)
 
-    RED = (210, 15, 15)
-    brd = max(5, int(stamp_h * 0.08))
+    RED = (235, 0, 0)
+    brd = max(8, int(stamp_h * 0.13))
 
     draw.rectangle([0, 0, stamp_w - 1, stamp_h - 1], outline=RED, width=brd)
-    inset = int(brd * 1.5)
+    inset = int(brd * 1.4)
     draw.rectangle(
         [inset, inset, stamp_w - 1 - inset, stamp_h - 1 - inset],
         outline=RED,
-        width=max(2, brd // 2),
+        width=max(3, brd // 2),
     )
 
     text_x = (stamp_w - text_w) // 2
@@ -67,16 +67,16 @@ def add_terminated_stamp(image_bytes: bytes) -> bytes:
 
     pixels = canvas.load()
     random.seed(42)
-    for _ in range(int(stamp_w * stamp_h * 0.18)):
+    for _ in range(int(stamp_w * stamp_h * 0.06)):
         px = random.randint(0, stamp_w - 1)
         py = random.randint(0, stamp_h - 1)
         if pixels[px, py][3] != 0:
             pixels[px, py] = (pixels[px, py][0], pixels[px, py][1], pixels[px, py][2], 0)
 
-    canvas = canvas.filter(ImageFilter.GaussianBlur(radius=1.2))
+    canvas = canvas.filter(ImageFilter.GaussianBlur(radius=0.5))
 
     r, g, b, a2 = canvas.split()
-    a2 = a2.point(lambda p: int(p * 0.62))
+    a2 = a2.point(lambda p: int(p * 0.88))
     canvas = Image.merge("RGBA", (r, g, b, a2))
 
     canvas = canvas.rotate(18, expand=True)
