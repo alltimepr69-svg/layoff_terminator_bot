@@ -97,14 +97,19 @@ WELCOME_TEXT = """🔴 *TERMINATED BOT is here.*
 I stamp your photos with an official-looking *TERMINATED* seal.
 
 *How to use:*
-• *In private chat:* Send or forward any photo → I'll stamp it instantly
-• *In groups:* Send a photo with `/terminate` as the caption
-• Supports compressed photos and uncompressed image files
+
+🔹 *In private chat:*
+Just send or forward any photo — I'll stamp it instantly.
+
+🔹 *In groups:*
+Two ways to trigger me:
+1. Send a photo with `/terminate` as the caption
+2. Reply to any existing photo with `/terminate`
 
 *Commands:*
 /start — Show this message
 /help — How to use the bot
-/terminate — Send with a photo to stamp it (groups)
+/terminate — Stamp a photo in groups (use as caption or reply to a photo)
 
 Just drop an image and watch it get terminated. 💀"""
 
