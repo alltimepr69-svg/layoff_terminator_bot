@@ -158,10 +158,7 @@ async def handle_terminate_command(update: Update, context: ContextTypes.DEFAULT
         doc = reply.document
         await _stamp_and_reply(update, context, doc.file_id, doc.file_size)
     else:
-        await update.message.reply_text(
-            "Send a photo with `/terminate` as the caption, or reply to a photo with /terminate. 🔴",
-            parse_mode="Markdown",
-        )
+        return
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
