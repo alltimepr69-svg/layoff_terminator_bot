@@ -97,13 +97,14 @@ WELCOME_TEXT = """🔴 *TERMINATED BOT is here.*
 I stamp your photos with an official-looking *TERMINATED* seal.
 
 *How to use:*
-• Send or forward any photo → I'll stamp it instantly
-• Works in private chat and groups
+• *In private chat:* Send or forward any photo → I'll stamp it instantly
+• *In groups:* Send a photo with `/terminate` as the caption
 • Supports compressed photos and uncompressed image files
 
 *Commands:*
 /start — Show this message
 /help — How to use the bot
+/terminate — Send with a photo to stamp it (groups)
 
 Just drop an image and watch it get terminated. 💀"""
 
@@ -136,31 +137,58 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 MAX_DIMENSION = 8000  # pixels
 
 
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    photo = update.message.photo[-1]
-    if photo.file_size and photo.file_size > MAX_FILE_SIZE:
+def _is_group(update: Update) -> bool:
+    return update.message.chat.type in ("group", "supergroup")
+
+
+def _has_terminate_caption(update: Update) -> bool:
+    caption = (update.message.caption or "").strip()
+    return caption.startswith("/terminate")
+
+
+async def _stamp_and_reply(update, context, file_id, file_size):
+    if file_size and file_size > MAX_FILE_SIZE:
         await update.message.reply_text("❌ Image too large (max 10 MB).")
         return
     await update.message.reply_text("⏳ Stamping...")
-    file = await context.bot.get_file(photo.file_id)
+    file = await context.bot.get_file(file_id)
     file_bytes = await file.download_as_bytearray()
     stamped = add_terminated_stamp(bytes(file_bytes))
     await update.message.reply_photo(photo=io.BytesIO(stamped), caption="🔴 TERMINATED")
+
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if _is_group(update) and not _has_terminate_caption(update):
+        return
+    photo = update.message.photo[-1]
+    await _stamp_and_reply(update, context, photo.file_id, photo.file_size)
 
 
 async def handle_document_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    doc = update.message.document
-    if doc.file_size and doc.file_size > MAX_FILE_SIZE:
-        await update.message.reply_text("❌ Image too large (max 10 MB).")
+    if _is_group(update) and not _has_terminate_caption(update):
         return
-    await update.message.reply_text("⏳ Stamping...")
-    file = await context.bot.get_file(doc.file_id)
-    file_bytes = await file.download_as_bytearray()
-    stamped = add_terminated_stamp(bytes(file_bytes))
-    await update.message.reply_photo(photo=io.BytesIO(stamped), caption="🔴 TERMINATED")
+    doc = update.message.document
+    await _stamp_and_reply(update, context, doc.file_id, doc.file_size)
+
+
+async def handle_terminate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /terminate sent as a reply to a photo in groups."""
+    if not _is_group(update):
+        return
+    reply = update.message.reply_to_message
+    if reply and reply.photo:
+        photo = reply.photo[-1]
+        await _stamp_and_reply(update, context, photo.file_id, photo.file_size)
+    elif reply and reply.document and reply.document.mime_type and reply.document.mime_type.startswith("image/"):
+        doc = reply.document
+        await _stamp_and_reply(update, context, doc.file_id, doc.file_size)
+    else:
+        await update.message.reply_text("Send a photo with `/terminate` as the caption, or reply to a photo with /terminate. 🔴", parse_mode="Markdown")
 
 
 async def handle_other(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if _is_group(update):
+        return
     await update.message.reply_text("Send me any image and I'll stamp it TERMINATED. 🔴")
 
 
@@ -168,6 +196,7 @@ if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", handle_start))
     app.add_handler(CommandHandler("help", handle_help))
+    app.add_handler(CommandHandler("terminate", handle_terminate_command))
     app.add_handler(ChatMemberHandler(handle_bot_added_to_group, ChatMemberHandler.MY_CHAT_MEMBER))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.IMAGE, handle_document_image))
