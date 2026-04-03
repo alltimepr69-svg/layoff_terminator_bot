@@ -3,7 +3,8 @@ import io
 import random
 from dotenv import load_dotenv
 from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
+from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, ChatMemberHandler, ContextTypes, filters
+from telegram.constants import ChatMemberStatus
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
 load_dotenv()
@@ -87,6 +88,46 @@ def add_terminated_stamp(image_bytes: bytes) -> bytes:
     return output.read()
 
 
+WELCOME_TEXT = """🔴 *TERMINATED BOT is here.*
+
+I stamp your photos with an official-looking *TERMINATED* seal.
+
+*How to use:*
+• Send or forward any photo → I'll stamp it instantly
+• Works in private chat and groups
+• Supports compressed photos and uncompressed image files
+
+*Commands:*
+/start — Show this message
+/help — How to use the bot
+
+Just drop an image and watch it get terminated. 💀"""
+
+
+async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(WELCOME_TEXT, parse_mode="Markdown")
+
+
+async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(WELCOME_TEXT, parse_mode="Markdown")
+
+
+async def handle_bot_added_to_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    result = update.my_chat_member
+    was_member = result.old_chat_member.status in (
+        ChatMemberStatus.LEFT, ChatMemberStatus.BANNED
+    )
+    is_member = result.new_chat_member.status in (
+        ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR
+    )
+    if was_member and is_member:
+        await context.bot.send_message(
+            chat_id=result.chat.id,
+            text=WELCOME_TEXT,
+            parse_mode="Markdown",
+        )
+
+
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("⏳ Stamping...")
     photo = update.message.photo[-1]
@@ -111,7 +152,10 @@ async def handle_other(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 if __name__ == "__main__":
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", handle_start))
+    app.add_handler(CommandHandler("help", handle_help))
+    app.add_handler(ChatMemberHandler(handle_bot_added_to_group, ChatMemberHandler.MY_CHAT_MEMBER))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.IMAGE, handle_document_image))
     app.add_handler(MessageHandler(~filters.PHOTO & ~filters.Document.IMAGE, handle_other))
-    app.run_polling()
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
