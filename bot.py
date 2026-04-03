@@ -14,6 +14,10 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 def add_terminated_stamp(image_bytes: bytes) -> bytes:
     img = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
     w, h = img.size
+    if w > MAX_DIMENSION or h > MAX_DIMENSION:
+        scale = MAX_DIMENSION / max(w, h)
+        img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+        w, h = img.size
 
     max_stamp_w = int(w * 0.70)
     padding_x = int(w * 0.06)
@@ -128,9 +132,16 @@ async def handle_bot_added_to_group(update: Update, context: ContextTypes.DEFAUL
         )
 
 
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+MAX_DIMENSION = 8000  # pixels
+
+
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⏳ Stamping...")
     photo = update.message.photo[-1]
+    if photo.file_size and photo.file_size > MAX_FILE_SIZE:
+        await update.message.reply_text("❌ Image too large (max 10 MB).")
+        return
+    await update.message.reply_text("⏳ Stamping...")
     file = await context.bot.get_file(photo.file_id)
     file_bytes = await file.download_as_bytearray()
     stamped = add_terminated_stamp(bytes(file_bytes))
@@ -138,8 +149,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_document_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⏳ Stamping...")
     doc = update.message.document
+    if doc.file_size and doc.file_size > MAX_FILE_SIZE:
+        await update.message.reply_text("❌ Image too large (max 10 MB).")
+        return
+    await update.message.reply_text("⏳ Stamping...")
     file = await context.bot.get_file(doc.file_id)
     file_bytes = await file.download_as_bytearray()
     stamped = add_terminated_stamp(bytes(file_bytes))
