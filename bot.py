@@ -19,27 +19,31 @@ def add_terminated_stamp(image_bytes: bytes) -> bytes:
         img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
         w, h = img.size
 
-    max_stamp_w = int(w * 0.70)
-    padding_x = int(w * 0.06)
-    padding_y = int(h * 0.04)
+    # Work at 2x scale for crisp rendering, then downscale
+    SCALE = 2
+    sw, sh = w * SCALE, h * SCALE
 
-    font_size = int(h * 0.18)
+    max_stamp_w = int(sw * 0.70)
+    padding_x = int(sw * 0.055)
+    padding_y = int(sh * 0.038)
+
+    font_size = int(sh * 0.18)
     font_path = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-    try:
-        font = ImageFont.truetype(font_path, font_size)
-    except (IOError, OSError):
-        font = ImageFont.load_default()
 
+    def get_font(size):
+        try:
+            return ImageFont.truetype(font_path, size)
+        except (IOError, OSError):
+            return ImageFont.load_default()
+
+    font = get_font(font_size)
     dummy_draw = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
     bbox = dummy_draw.textbbox((0, 0), "TERMINATED", font=font)
     text_w = bbox[2] - bbox[0]
 
     while text_w + padding_x * 2 > max_stamp_w:
         font_size -= 2
-        try:
-            font = ImageFont.truetype(font_path, font_size)
-        except (IOError, OSError):
-            font = ImageFont.load_default()
+        font = get_font(font_size)
         bbox = dummy_draw.textbbox((0, 0), "TERMINATED", font=font)
         text_w = bbox[2] - bbox[0]
 
@@ -50,36 +54,28 @@ def add_terminated_stamp(image_bytes: bytes) -> bytes:
     canvas = Image.new("RGBA", (stamp_w, stamp_h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas)
 
-    RED = (235, 0, 0)
-    brd = max(8, int(stamp_h * 0.13))
+    RED = (255, 25, 25)
+    brd = max(10, int(stamp_h * 0.11))
 
+    # Single clean border only
     draw.rectangle([0, 0, stamp_w - 1, stamp_h - 1], outline=RED, width=brd)
-    inset = int(brd * 1.4)
-    draw.rectangle(
-        [inset, inset, stamp_w - 1 - inset, stamp_h - 1 - inset],
-        outline=RED,
-        width=max(3, brd // 2),
-    )
 
     text_x = (stamp_w - text_w) // 2
     text_y = (stamp_h - text_h) // 2
     draw.text((text_x, text_y), "TERMINATED", font=font, fill=RED)
 
-    pixels = canvas.load()
-    random.seed(42)
-    for _ in range(int(stamp_w * stamp_h * 0.06)):
-        px = random.randint(0, stamp_w - 1)
-        py = random.randint(0, stamp_h - 1)
-        if pixels[px, py][3] != 0:
-            pixels[px, py] = (pixels[px, py][0], pixels[px, py][1], pixels[px, py][2], 0)
-
-    canvas = canvas.filter(ImageFilter.GaussianBlur(radius=0.5))
-
+    # No blur, no pixel dropout — crisp and clean
     r, g, b, a2 = canvas.split()
-    a2 = a2.point(lambda p: int(p * 0.88))
+    a2 = a2.point(lambda p: int(p * 0.92))
     canvas = Image.merge("RGBA", (r, g, b, a2))
 
-    canvas = canvas.rotate(18, expand=True)
+    canvas = canvas.rotate(18, expand=True, resample=Image.BICUBIC)
+
+    # Downscale stamp back to target image dimensions for anti-aliased result
+    canvas = canvas.resize(
+        (canvas.width // SCALE, canvas.height // SCALE),
+        Image.LANCZOS,
+    )
 
     paste_x = (w - canvas.width) // 2
     paste_y = (h - canvas.height) // 2
@@ -87,7 +83,7 @@ def add_terminated_stamp(image_bytes: bytes) -> bytes:
 
     img = img.convert("RGB")
     output = io.BytesIO()
-    img.save(output, format="JPEG", quality=95)
+    img.save(output, format="JPEG", quality=97)
     output.seek(0)
     return output.read()
 
